@@ -1,112 +1,34 @@
-# kern - Project Instructions
+# apple-embeddings-server Instructions
 
-> **apfel is the golden example.** All patterns, conventions, and guardrails from [apfel](https://github.com/Arthur-Ficial/apfel) apply here. When in doubt, check how apfel does it.
+> **Project Goal:** Expose Apple's on-device `NLContextualEmbedding` (`NaturalLanguage` framework) as an efficient CLI tool and OpenAI-compatible HTTP embeddings server.
 
-## The Golden Goal
+## Architecture & Layout
 
-kern has ONE purpose with TWO delivery modes:
-
-> **Expose Apple's on-device NLContextualEmbedding as a usable UNIX tool
-> and an OpenAI API-compatible embeddings server.**
-
-### The two modes, in priority order:
-
-1. **UNIX tool** (`kern "text"`, `kern --similarity "cat" "dog"`, `kern -f doc.txt`)
-   - Text in, vector out. JSON array of floats.
-   - Pipe-friendly: `echo "search query" | kern`
-   - Similarity mode: `kern --similarity "cat" "dog"` outputs cosine score
-   - Batch mode: `kern -f corpus.txt` embeds each line
-   - Works with `jq`, `xargs`, shell scripts
-   - `--json` output for machine consumption
-   - Respects `NO_COLOR`, `--quiet`, stdin detection
-   - Correct exit codes
-
-2. **OpenAI-compatible HTTP server** (`kern --serve`)
-   - Drop-in replacement for `POST /v1/embeddings`
-   - Accepts text input, returns embedding vectors in OpenAI format
-   - Same security model as apfel (origin check, token auth, CORS)
-   - Honest 501s for unsupported features
-
-### Non-negotiable principles:
-
-- **100% on-device.** No cloud, no API keys, no network for inference. Ever.
-- **Honest about limitations.** Token-level vectors aggregated via mean pooling, not native sentence embeddings. 512 dimensions. Limited language support. Say so clearly.
-- **Clean code, clean logic.** No hacks. Proper error types.
-- **Swift 6 strict concurrency.** No data races.
-- **Zero dependencies.** Model ships with macOS. No downloads needed for base model.
-
-## Part of the apfel ecosystem
-
-kern is a sister project to [apfel](https://github.com/Arthur-Ficial/apfel).
-
-| Tool | What | Apple Framework | Repo |
-|------|------|-----------------|------|
-| [apfel](https://github.com/Arthur-Ficial/apfel) | LLM (text generation) | FoundationModels | **golden example** |
-| [ohr](https://github.com/Arthur-Ficial/ohr) | Speech-to-text | SpeechAnalyzer | sister project |
-| **kern** (this) | Text embeddings | NLContextualEmbedding | you are here |
-| [auge](https://github.com/Arthur-Ficial/auge) | Vision / OCR | Vision | sister project |
-
-Meta-repo: [apfel-ecosystem](https://github.com/Arthur-Ficial/apfel-ecosystem)
-
-## Important: Token-Level Embeddings
-
-Apple's NLContextualEmbedding returns vectors per token (word/subword), NOT per sentence. kern must:
-1. Get token-level vectors from the framework
-2. Aggregate via mean pooling to produce one vector per input
-3. Document this clearly - these are NOT the same as OpenAI's ada-002 sentence embeddings
-
-## Architecture
-
-```
-CLI (text/file/stdin) --┐
-                        ├--> Embedder.swift --> NLContextualEmbedding (on-device)
-HTTP Server (/v1/*) ----┘    token vectors --> mean pooling --> sentence vector
+```text
+apple-embeddings-server/
+├── Package.swift
+├── README.md
+├── Sources/
+│   └── AppleEmbeddingsServer/
+│       ├── AppleEmbeddingsServer.swift  # ArgumentParser CLI entry point (@main)
+│       ├── EmbeddingEngine.swift        # Actor isolating NLContextualEmbedding
+│       ├── Models.swift                 # ModelAlias, OpenAI DTOs & errors
+│       └── Server.swift                 # Hummingbird 2.x HTTP router
+└── Tests/
+    └── AppleEmbeddingsServerTests/
+        └── AppleEmbeddingsServerTests.swift  # Swift Testing suite
 ```
 
-- `KernCore` library: pure Swift, no NaturalLanguage dependency, unit-testable
-- Main target: NLContextualEmbedding integration, Hummingbird HTTP server
-- Apple framework: `import NaturalLanguage` (NLContextualEmbedding)
-- Output: 512-dimensional float vectors, JSON format
-- Tests: `swift run kern-tests` (pure Swift runner, no XCTest needed - same pattern as apfel)
-- No Xcode required - builds with Command Line Tools only
-- Requires macOS 14+ (upgraded in macOS 26)
+## Non-Negotiable Principles
+
+- **Swift 6 Strict Concurrency**: Use actors, `Sendable`, and explicit isolation.
+- **Dynamic Model Properties**: Never hardcode vector dimensions or model revisions; always query `embedding.dimension`, `embedding.modelIdentifier`, `embedding.revision`, and `embedding.maximumSequenceLength`.
+- **Mean Pooling & L2 Normalization**: Aggregate subword token vectors with mean pooling and scale via Accelerate/`vDSP`.
+- **OpenAI Compatibility**: Clean JSON structures for `/v1/embeddings`, `/v1/models`, and OpenAI-style error responses.
 
 ## Build & Test
 
 ```bash
-make install                   # bump patch + build release + install to /usr/local/bin
-make build                     # bump patch + build release
-swift build                    # debug build
-swift run kern-tests           # run pure Swift unit tests
+swift build -c release
+swift test
 ```
-
-**Version is in `.version` file** (single source of truth). Same auto-bump pattern as apfel.
-
-**Always use `make install` for testing changes.**
-
-Integration tests (requires server running):
-```bash
-python3 -m pytest Tests/integration/ -v
-```
-
-## Key Files
-
-| Area | Files |
-|------|-------|
-| Entry point | `Sources/main.swift` |
-| CLI commands | `Sources/CLI.swift` |
-| Embeddings | `Sources/Embedder.swift` |
-| HTTP server | `Sources/Server.swift`, `Sources/Handlers.swift` |
-| Error types | `Sources/Core/KernError.swift` |
-| Build info | `Sources/BuildInfo.swift` (auto-generated by `make`) |
-| Tests | `Tests/kernTests/`, `Tests/integration/` |
-
-## Handling GitHub Issues
-
-Same process as apfel:
-
-1. **Fetch** the full issue with `gh issue view <n> --repo Arthur-Ficial/kern --json body,comments,title,author,labels`
-2. **Vet** - does it align with the golden goal? Can you reproduce it?
-3. **Fix** if valid - TDD, keep changes minimal, run all tests
-4. **Release** if code changed - `make install`, package asset, `gh release create`, update homebrew tap
-5. **Close** with a friendly, short, truthful comment
