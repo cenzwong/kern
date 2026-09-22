@@ -16,6 +16,16 @@ struct AppleEmbeddingsServerTests {
         #expect(ModelAlias.cjk.rawValue == "apple-nl-contextual-cjk")
     }
 
+    @Test("Model aliases route to their Apple script families")
+    func testModelAliasScriptMappings() {
+        #expect(ModelAlias.latin.script == .latin)
+        #expect(ModelAlias.cyrillic.script == .cyrillic)
+        #expect(ModelAlias.cjk.script == .traditionalChinese)
+        #expect(ModelAlias.arabic.script == .arabic)
+        #expect(ModelAlias.indic.script == .devanagari)
+        #expect(ModelAlias.thai.script == .thai)
+    }
+
     @Test("Embedding Request JSON Decoding - Single String")
     func testSingleStringRequestDecoding() throws {
         let json = """
@@ -75,6 +85,44 @@ struct AppleEmbeddingsServerTests {
         #expect(throws: EmbeddingEngineError.self) {
             try EmbeddingEngine.meanPoolAndL2Normalize(tokenVectors: [], expectedDimension: 512)
         }
+    }
+
+    @Test("CJK family embeds Chinese, Japanese, and Korean")
+    func testCJKFamilyLanguages() async throws {
+        #if os(macOS)
+        let engine = try await EmbeddingEngine(alias: .cjk)
+        for text in ["今天天氣很好", "今天天气很好", "今日は天気がいいです", "오늘 날씨가 좋습니다"] {
+            let vector = try await engine.generateEmbedding(for: text)
+            #expect(vector.count == (await engine.dimension))
+        }
+        #endif
+    }
+
+    @Test("Latin family embeds French")
+    func testLatinFamilyLanguages() async throws {
+        #if os(macOS)
+        let engine = try await EmbeddingEngine(alias: .latin)
+        let vector = try await engine.generateEmbedding(for: "Bonjour, le monde")
+        #expect(vector.count == (await engine.dimension))
+        #endif
+    }
+
+    @Test("Cyrillic family embeds Ukrainian")
+    func testCyrillicFamilyLanguages() async throws {
+        #if os(macOS)
+        let engine = try await EmbeddingEngine(alias: .cyrillic)
+        let vector = try await engine.generateEmbedding(for: "Привіт, світе")
+        #expect(vector.count == (await engine.dimension))
+        #endif
+    }
+
+    @Test("Indic family embeds Tamil")
+    func testIndicFamilyLanguages() async throws {
+        #if os(macOS)
+        let engine = try await EmbeddingEngine(alias: .indic)
+        let vector = try await engine.generateEmbedding(for: "வணக்கம் உலகம்")
+        #expect(vector.count == (await engine.dimension))
+        #endif
     }
 
     @Test("HTTP Endpoint /health")

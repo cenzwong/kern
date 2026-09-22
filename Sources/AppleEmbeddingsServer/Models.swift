@@ -12,25 +12,11 @@ public enum ModelAlias: String, Codable, CaseIterable, Sendable {
 
     public static let `default`: ModelAlias = .latin
 
-    /// Maps model alias to Apple NLLanguage
-    public var language: NLLanguage {
-        switch self {
-        case .latin:
-            return .english
-        case .cyrillic:
-            return .russian
-        case .cjk:
-            return .simplifiedChinese
-        case .arabic:
-            return .arabic
-        case .indic:
-            return .hindi
-        case .thai:
-            return .thai
-        }
-    }
-
-    /// Maps model alias to Apple NLScript
+    /// Maps the model alias to Apple's contextual-embedding model family.
+    ///
+    /// The returned script is a model lookup key, not a claim that the model
+    /// only supports one language. For example, the CJK family covers Chinese,
+    /// Japanese, and Korean.
     public var script: NLScript {
         switch self {
         case .latin:
@@ -38,7 +24,7 @@ public enum ModelAlias: String, Codable, CaseIterable, Sendable {
         case .cyrillic:
             return .cyrillic
         case .cjk:
-            return .simplifiedHan
+            return .traditionalChinese
         case .arabic:
             return .arabic
         case .indic:

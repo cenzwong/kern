@@ -38,7 +38,7 @@ public actor EmbeddingEngine {
     public init(alias: ModelAlias = .latin) async throws {
         self.alias = alias
 
-        guard let model = NLContextualEmbedding(language: alias.language) ?? NLContextualEmbedding(script: alias.script) else {
+        guard let model = NLContextualEmbedding(script: alias.script) else {
             throw EmbeddingEngineError.modelNotFound(alias.rawValue)
         }
 
@@ -126,7 +126,7 @@ public actor EmbeddingEngine {
             throw EmbeddingEngineError.sequenceLengthExceeded(current: text.count, max: maximumSequenceLength)
         }
 
-        let result = try embeddingModel.embeddingResult(for: text, language: alias.language)
+        let result = try embeddingModel.embeddingResult(for: text, language: nil)
 
         var tokenVectors: [[Double]] = []
 
